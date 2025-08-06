@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0B1426;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -11,31 +29,209 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #0B1426 0%, #050A14 100%);
   color: white;
+  overflow-x: hidden;
 }
 
 * {
   box-sizing: border-box;
 }
 
+/* Enhanced gradient text with animation */
 .gradient-text {
-  background: linear-gradient(135deg, #00D2FF 0%, #FFD700 100%);
+  background: linear-gradient(135deg, #00D2FF 0%, #FFD700 50%, #00D2FF 100%);
+  background-size: 200% 200%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: gradient-shift 3s ease-in-out infinite;
 }
 
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Enhanced crypto card with better hover effects */
 .crypto-card {
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
 }
 
+.crypto-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 210, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.crypto-card:hover::before {
+  left: 100%;
+}
+
+.crypto-card:hover {
+  border-color: rgba(0, 210, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 210, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Enhanced button with better animations */
 .crypto-button {
   background: linear-gradient(135deg, #00D2FF 0%, #FFD700 100%);
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.crypto-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.crypto-button:hover::before {
+  left: 100%;
 }
 
 .crypto-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(0, 210, 255, 0.3);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0, 210, 255, 0.4);
+}
+
+.crypto-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Pulse animation for loading states */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Smooth page transitions */
+.page-transition {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Focus styles for accessibility */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-crypto-accent focus:ring-offset-2 focus:ring-offset-crypto-darker;
+}
+
+/* Custom input focus effects */
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 2px rgba(0, 210, 255, 0.5);
+}
+
+/* Smooth transitions for interactive elements */
+button, a, input, select {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Floating animation for hero elements */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Glow effect for accent elements */
+.glow {
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+}
+
+.glow:hover {
+  box-shadow: 0 0 30px rgba(0, 210, 255, 0.5);
+}
+
+/* Skeleton loading animation */
+@keyframes skeleton {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #374151 25%, #4B5563 50%, #374151 75%);
+  background-size: 200px 100%;
+  animation: skeleton 1.5s infinite linear;
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 768px) {
+  .crypto-card:hover {
+    transform: none;
+  }
+  
+  .crypto-button:hover {
+    transform: none;
+  }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
