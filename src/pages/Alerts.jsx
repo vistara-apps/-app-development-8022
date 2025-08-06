@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Bell, Trash2, Edit, Save, X } from 'lucide-react'
+import alertService from '../services/alertService'
+import monitoringService from '../services/monitoringService'
 
 const Alerts = () => {
   const [alerts, setAlerts] = useState([])
@@ -7,98 +9,144 @@ const Alerts = () => {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState({
     project: '',
-    condition: 'mention_increase',
+    type: 'mention_increase',
     threshold: '',
-    notification: 'email'
+    notificationMethod: 'browser',
+    direction: 'any'
   })
 
   useEffect(() => {
-    // Initialize with sample alerts
-    setAlerts([
-      {
-        id: 1,
-        project: 'Bitcoin',
-        condition: 'mention_increase',
-        threshold: '20%',
-        notification: 'email',
-        status: 'active',
-        triggered: 3,
-        created: '2024-01-15'
-      },
-      {
-        id: 2,
-        project: 'Ethereum',
-        condition: 'sentiment_drop',
-        threshold: '40%',
-        notification: 'push',
-        status: 'active',
-        triggered: 1,
-        created: '2024-01-14'
-      },
-      {
-        id: 3,
-        project: 'Solana',
-        condition: 'new_mention',
-        threshold: '10',
-        notification: 'email',
-        status: 'paused',
-        triggered: 8,
-        created: '2024-01-13'
-      }
-    ])
+    // Load alerts from alert service
+    loadAlerts()
+    
+    // Start monitoring service if not already running
+    if (!monitoringService.getMonitoringStatus().isMonitoring) {
+      monitoringService.startMonitoring()
+    }
   }, [])
 
-  const handleSubmit = (e) => {
+  const loadAlerts = () => {
+    try {
+      const existingAlerts = alertService.getAllAlerts()
+      if (existingAlerts.length > 0) {
+        setAlerts(existingAlerts)
+      } else {
+        // Initialize with sample alerts if none exist
+        initializeSampleAlerts()
+      }
+    } catch (error) {
+      console.error('Failed to load alerts:', error)
+      initializeSampleAlerts()
+    }
+  }
+
+  const initializeSampleAlerts = async () => {
+    const sampleAlerts = [
+      {
+        type: 'mention_increase',
+        config: {
+          project: 'Bitcoin',
+          threshold: '20',
+          notificationMethod: 'browser'
+        }
+      },
+      {
+        type: 'sentiment_change',
+        config: {
+          project: 'Ethereum',
+          threshold: '40',
+          direction: 'negative',
+          notificationMethod: 'browser'
+        }
+      },
+      {
+        type: 'new_mention',
+        config: {
+          project: 'Solana',
+          threshold: '10',
+          notificationMethod: 'browser'
+        }
+      }
+    ]
+
+    for (const alertConfig of sampleAlerts) {
+      try {
+        await alertService.createAlert(alertConfig)
+      } catch (error) {
+        console.error('Failed to create sample alert:', error)
+      }
+    }
+    
+    setAlerts(alertService.getAllAlerts())
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (editingId) {
-      setAlerts(alerts.map(alert => 
-        alert.id === editingId 
-          ? { ...alert, ...formData }
-          : alert
-      ))
-      setEditingId(null)
-    } else {
-      const newAlert = {
-        id: Date.now(),
-        ...formData,
-        status: 'active',
-        triggered: 0,
-        created: new Date().toISOString().split('T')[0]
+    try {
+      if (editingId) {
+        // Update existing alert
+        await alertService.updateAlert(editingId, { config: formData })
+      } else {
+        // Create new alert
+        await alertService.createAlert({
+          type: formData.type,
+          config: formData
+        })
       }
-      setAlerts([...alerts, newAlert])
+      
+      // Reload alerts
+      setAlerts(alertService.getAllAlerts())
+      setEditingId(null)
+    } catch (error) {
+      console.error('Failed to save alert:', error)
+      alert('Failed to save alert: ' + error.message)
     }
     
     setFormData({
       project: '',
-      condition: 'mention_increase',
+      type: 'mention_increase',
       threshold: '',
-      notification: 'email'
+      notificationMethod: 'browser',
+      direction: 'any'
     })
     setShowForm(false)
   }
 
   const editAlert = (alert) => {
     setFormData({
-      project: alert.project,
-      condition: alert.condition,
-      threshold: alert.threshold,
-      notification: alert.notification
+      project: alert.config?.project || alert.project,
+      type: alert.type || alert.condition,
+      threshold: alert.config?.threshold || alert.threshold,
+      notificationMethod: alert.config?.notificationMethod || alert.notification,
+      direction: alert.config?.direction || 'any'
     })
     setEditingId(alert.id)
     setShowForm(true)
   }
 
-  const deleteAlert = (id) => {
-    setAlerts(alerts.filter(alert => alert.id !== id))
+  const deleteAlert = async (id) => {
+    try {
+      await alertService.deleteAlert(id)
+      setAlerts(alertService.getAllAlerts())
+    } catch (error) {
+      console.error('Failed to delete alert:', error)
+      alert('Failed to delete alert: ' + error.message)
+    }
   }
 
-  const toggleStatus = (id) => {
-    setAlerts(alerts.map(alert => 
-      alert.id === id 
-        ? { ...alert, status: alert.status === 'active' ? 'paused' : 'active' }
-        : alert
-    ))
+  const toggleStatus = async (id) => {
+    try {
+      const alert = alerts.find(a => a.id === id)
+      if (alert) {
+        const newStatus = alert.status === 'active' ? 'paused' : 'active'
+        await alertService.updateAlert(id, { status: newStatus })
+        setAlerts(alertService.getAllAlerts())
+      }
+    } catch (error) {
+      console.error('Failed to toggle alert status:', error)
+      alert('Failed to toggle alert status: ' + error.message)
+    }
   }
 
   const conditionLabels = {
