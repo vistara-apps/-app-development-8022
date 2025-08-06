@@ -6,6 +6,8 @@ import { SkeletonStats, SkeletonChart, LoadingSpinner } from '../components/Load
 import { DataError } from '../components/ErrorStates'
 import twitterService from '../services/twitterService'
 import sentimentService from '../services/sentimentService'
+import dexScreenerService from '../services/dexScreenerService'
+import coinGeckoService from '../services/coinGeckoService'
 
 const Dashboard = () => {
   const [marketData, setMarketData] = useState([])
@@ -81,9 +83,26 @@ const Dashboard = () => {
     setInsightsError(null)
     
     try {
-      // Fetch real market data from services
-      const [trendingTopics, bitcoinSentiment, ethereumSentiment, solanaSentiment] = await Promise.allSettled([
+      // Fetch comprehensive real market data from multiple sources
+      const [
+        trendingTopics,
+        coinGeckoTrending,
+        dexTrending,
+        globalMarketData,
+        bitcoinData,
+        ethereumData,
+        solanaData,
+        bitcoinSentiment,
+        ethereumSentiment,
+        solanaSentiment
+      ] = await Promise.allSettled([
         twitterService.getTrendingTopics(),
+        coinGeckoService.getTrendingCoins(),
+        dexScreenerService.getTrendingTokens(),
+        coinGeckoService.getGlobalMarketData(),
+        coinGeckoService.getCoinsMarketData(['bitcoin']),
+        coinGeckoService.getCoinsMarketData(['ethereum']),
+        coinGeckoService.getCoinsMarketData(['solana']),
         sentimentService.analyzeProjectSentiment('Bitcoin', { timeframe: '24h', sampleSize: 50 }),
         sentimentService.analyzeProjectSentiment('Ethereum', { timeframe: '24h', sampleSize: 50 }),
         sentimentService.analyzeProjectSentiment('Solana', { timeframe: '24h', sampleSize: 50 })
@@ -91,35 +110,64 @@ const Dashboard = () => {
 
       // Process the results
       const trending = trendingTopics.status === 'fulfilled' ? trendingTopics.value : []
+      const cgTrending = coinGeckoTrending.status === 'fulfilled' ? coinGeckoTrending.value : { coins: [] }
+      const dexTrendingData = dexTrending.status === 'fulfilled' ? dexTrending.value : { trending: [] }
+      const globalData = globalMarketData.status === 'fulfilled' ? globalMarketData.value : null
+      
+      const marketPrices = [
+        bitcoinData.status === 'fulfilled' ? bitcoinData.value[0] : null,
+        ethereumData.status === 'fulfilled' ? ethereumData.value[0] : null,
+        solanaData.status === 'fulfilled' ? solanaData.value[0] : null
+      ].filter(Boolean)
+
       const sentiments = [
         bitcoinSentiment.status === 'fulfilled' ? bitcoinSentiment.value : null,
         ethereumSentiment.status === 'fulfilled' ? ethereumSentiment.value : null,
         solanaSentiment.status === 'fulfilled' ? solanaSentiment.value : null
       ].filter(Boolean)
 
-      // Calculate market metrics
+      // Calculate comprehensive market metrics
       const topMentions = trending.slice(0, 5).map(t => t.topic)
       const totalVolume = trending.reduce((sum, t) => sum + t.volume, 0)
       const averageSentiment = sentiments.length > 0 
         ? sentiments.reduce((sum, s) => sum + s.sentiment_score, 0) / sentiments.length 
         : 0.5
       
-      const marketTrend = averageSentiment > 0.6 ? 'bullish' : averageSentiment < 0.4 ? 'bearish' : 'neutral'
+      // Determine market trend based on multiple factors
+      const priceChanges = marketPrices.map(p => p.priceChangePercentage24h || 0)
+      const avgPriceChange = priceChanges.length > 0 ? priceChanges.reduce((sum, p) => sum + p, 0) / priceChanges.length : 0
+      
+      let marketTrend = 'neutral'
+      if (averageSentiment > 0.6 && avgPriceChange > 2) {
+        marketTrend = 'bullish'
+      } else if (averageSentiment < 0.4 && avgPriceChange < -2) {
+        marketTrend = 'bearish'
+      } else if (averageSentiment > 0.55 || avgPriceChange > 1) {
+        marketTrend = 'bullish'
+      } else if (averageSentiment < 0.45 || avgPriceChange < -1) {
+        marketTrend = 'bearish'
+      }
 
       // Prepare comprehensive data for AI analysis
-      const marketData = {
+      const comprehensiveMarketData = {
         marketTrend,
         topMentions,
         averageSentiment,
         totalVolume,
+        avgPriceChange,
         trendingTopics: trending,
+        coinGeckoTrending: cgTrending.coins.slice(0, 10),
+        dexTrending: dexTrendingData.trending.slice(0, 10),
+        globalMarketData: globalData,
+        majorTokens: marketPrices,
         sentimentAnalysis: sentiments,
         timestamp: new Date().toISOString(),
-        timeframe: '24h'
+        timeframe: '24h',
+        dataSource: 'real_apis'
       }
 
-      // Generate AI insights with real data
-      const aiInsights = await generateMarketInsights(marketData)
+      // Generate AI insights with comprehensive real data
+      const aiInsights = await generateMarketInsights(comprehensiveMarketData)
       setInsights(aiInsights)
       
     } catch (error) {

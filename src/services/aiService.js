@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import toolsService from './toolsService.js';
 
 const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPENROUTER_API_KEY,
@@ -87,5 +88,150 @@ Please provide a detailed analysis covering market sentiment, key trends, potent
   } catch (error) {
     console.error('Market insights error:', error);
     return 'Unable to generate market insights at this time. The AI analysis service is temporarily unavailable. Please try again in a few moments.';
+  }
+};
+
+/**
+ * Agentic AI Chat with Tools
+ * Enables the AI to use tools for real-time data access
+ */
+export const chatWithTools = async (messages, options = {}) => {
+  const {
+    maxIterations = 5,
+    temperature = 0.7,
+    model = "google/gemini-2.0-flash-001"
+  } = options;
+
+  try {
+    const tools = toolsService.getAvailableTools();
+    let currentMessages = [...messages];
+    let iteration = 0;
+
+    // Add system message with tool instructions
+    if (!currentMessages.find(m => m.role === 'system')) {
+      currentMessages.unshift({
+        role: 'system',
+        content: `You are CryptoSentinel AI, an expert cryptocurrency analyst with access to real-time market data and analysis tools.
+
+You can use the following tools to provide accurate, up-to-date information:
+- get_token_price: Get current price and market data for cryptocurrencies
+- search_tokens: Search for tokens by name or symbol
+- get_trending_tokens: Get currently trending cryptocurrencies
+- analyze_token_sentiment: Analyze social media sentiment for tokens
+- get_token_mentions: Get recent social media mentions
+- get_dex_token_data: Get DEX trading data from DexScreener
+- get_market_overview: Get overall market statistics
+- compare_tokens: Compare multiple tokens side by side
+
+Always use tools when users ask for current data, prices, trends, or analysis. Provide specific, actionable insights based on real data.`
+      });
+    }
+
+    while (iteration < maxIterations) {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: currentMessages,
+        tools,
+        tool_choice: "auto",
+        temperature,
+        max_tokens: 1000
+      });
+
+      const message = response.choices[0].message;
+      currentMessages.push(message);
+
+      // Check if AI wants to use tools
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        // Execute tool calls
+        for (const toolCall of message.tool_calls) {
+          try {
+            const toolName = toolCall.function.name;
+            const parameters = JSON.parse(toolCall.function.arguments);
+            
+            console.log(`Executing tool: ${toolName}`, parameters);
+            
+            const toolResult = await toolsService.executeTool(toolName, parameters);
+            
+            currentMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(toolResult)
+            });
+          } catch (error) {
+            console.error(`Tool execution error:`, error);
+            currentMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify({
+                error: true,
+                message: `Tool execution failed: ${error.message}`
+              })
+            });
+          }
+        }
+        
+        iteration++;
+        continue; // Continue the loop to get AI's response to tool results
+      }
+
+      // No more tool calls, return the final response
+      return {
+        success: true,
+        message: message.content,
+        usage: response.usage,
+        iterations: iteration + 1,
+        conversation: currentMessages
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Maximum iterations reached',
+      message: 'The AI assistant reached the maximum number of tool iterations. Please try a simpler request.',
+      iterations: maxIterations,
+      conversation: currentMessages
+    };
+
+  } catch (error) {
+    console.error('Agentic chat error:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: 'Unable to process your request at this time. Please try again.',
+      iterations: 0
+    };
+  }
+};
+
+/**
+ * Simple chat without tools (for basic conversations)
+ */
+export const simpleChat = async (messages, options = {}) => {
+  const {
+    temperature = 0.7,
+    model = "google/gemini-2.0-flash-001",
+    maxTokens = 500
+  } = options;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model,
+      messages,
+      temperature,
+      max_tokens: maxTokens
+    });
+
+    return {
+      success: true,
+      message: response.choices[0].message.content,
+      usage: response.usage
+    };
+  } catch (error) {
+    console.error('Simple chat error:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: 'Unable to process your request at this time. Please try again.'
+    };
   }
 };
