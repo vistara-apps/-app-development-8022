@@ -69,24 +69,24 @@ const Home = () => {
     <div className="min-h-screen">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24">
           <div className="text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 sm:mb-6 leading-tight">
               <span className="gradient-text">Harness the power</span><br />
-              of crypto market intelligence
+              <span className="text-white">of crypto market intelligence</span>
             </h1>
-            <p className="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
+            <p className="text-lg sm:text-xl text-gray-300 mb-6 sm:mb-8 max-w-3xl mx-auto px-4">
               Track high-signal crypto accounts, discover new projects early, and analyze market sentiment 
               with AI-powered insights for informed trading and investing.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
               <Link 
                 to="/dashboard" 
-                className="crypto-button px-8 py-3 rounded-lg font-semibold text-black"
+                className="crypto-button px-6 sm:px-8 py-3 rounded-lg font-semibold text-black text-center transition-transform hover:scale-105"
               >
                 Start Free Trial
               </Link>
-              <button className="px-8 py-3 rounded-lg border border-crypto-accent text-crypto-accent hover:bg-crypto-accent hover:text-black transition-colors">
+              <button className="px-6 sm:px-8 py-3 rounded-lg border border-crypto-accent text-crypto-accent hover:bg-crypto-accent hover:text-black transition-all hover:scale-105">
                 View Demo
               </button>
             </div>
@@ -95,25 +95,25 @@ const Home = () => {
       </div>
 
       {/* Features Section */}
-      <div className="py-24 bg-crypto-dark">
+      <div className="py-12 sm:py-16 lg:py-24 bg-crypto-dark">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold gradient-text mb-4">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl font-bold gradient-text mb-4">
               Comprehensive Crypto Intelligence
             </h2>
-            <p className="text-gray-300 text-lg">
+            <p className="text-gray-300 text-base sm:text-lg px-4">
               Everything you need to stay ahead in the crypto market
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             {features.map((feature, index) => {
               const Icon = feature.icon
               return (
-                <div key={index} className="crypto-card p-6 rounded-lg text-center">
-                  <Icon className="h-12 w-12 text-crypto-accent mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                  <p className="text-gray-300">{feature.description}</p>
+                <div key={index} className="crypto-card p-6 rounded-lg text-center hover:scale-105 transition-transform">
+                  <Icon className="h-10 w-10 sm:h-12 sm:w-12 text-crypto-accent mx-auto mb-4" />
+                  <h3 className="text-lg sm:text-xl font-semibold mb-3">{feature.title}</h3>
+                  <p className="text-gray-300 text-sm sm:text-base">{feature.description}</p>
                 </div>
               )
             })}
@@ -122,18 +122,18 @@ const Home = () => {
       </div>
 
       {/* Pricing Section */}
-      <div className="py-24">
+      <div className="py-12 sm:py-16 lg:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold gradient-text mb-4">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl font-bold gradient-text mb-4">
               Choose Your Plan
             </h2>
-            <p className="text-gray-300 text-lg">
+            <p className="text-gray-300 text-base sm:text-lg px-4">
               Flexible pricing for traders and investors of all levels
             </p>
           </div>
           
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
             {plans.map((plan, index) => (
               <div 
                 key={index} 

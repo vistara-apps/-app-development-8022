@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react'
-import { TrendingUp, TrendingDown, Activity, Bell, Eye } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Bell, Eye, RefreshCw } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { generateMarketInsights } from '../services/aiService'
+import { SkeletonStats, SkeletonChart, LoadingSpinner } from '../components/LoadingStates'
+import { DataError } from '../components/ErrorStates'
 
 const Dashboard = () => {
   const [marketData, setMarketData] = useState([])
   const [sentimentData, setSentimentData] = useState([])
   const [insights, setInsights] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     // Simulate market data
@@ -31,29 +35,48 @@ const Dashboard = () => {
       { project: 'Cardano', positive: 60, negative: 20, neutral: 20 },
     ]
 
-    const loadData = async () => {
-      const market = generateMarketData()
-      const sentiment = generateSentimentData()
-      
-      setMarketData(market)
-      setSentimentData(sentiment)
+    const loadData = async (isRefresh = false) => {
+      if (isRefresh) {
+        setRefreshing(true)
+      } else {
+        setLoading(true)
+      }
+      setError(null)
       
       try {
-        const aiInsights = await generateMarketInsights({
-          marketTrend: 'bullish',
-          topMentions: ['Bitcoin', 'Ethereum', 'Solana'],
-          averageSentiment: 0.65
-        })
-        setInsights(aiInsights)
-      } catch (error) {
-        setInsights('Market showing positive sentiment with increased activity in major cryptocurrencies.')
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, isRefresh ? 1000 : 2000))
+        
+        const market = generateMarketData()
+        const sentiment = generateSentimentData()
+        
+        setMarketData(market)
+        setSentimentData(sentiment)
+        
+        try {
+          const aiInsights = await generateMarketInsights({
+            marketTrend: 'bullish',
+            topMentions: ['Bitcoin', 'Ethereum', 'Solana'],
+            averageSentiment: 0.65
+          })
+          setInsights(aiInsights)
+        } catch (error) {
+          setInsights('Market showing positive sentiment with increased activity in major cryptocurrencies.')
+        }
+      } catch (err) {
+        setError(err)
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
       }
-      
-      setLoading(false)
     }
 
     loadData()
   }, [])
+
+  const handleRefresh = () => {
+    loadData(true)
+  }
 
   const stats = [
     {
@@ -86,32 +109,53 @@ const Dashboard = () => {
     }
   ]
 
-  if (loading) {
+  if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-crypto-accent"></div>
+      <div className="min-h-screen">
+        <DataError 
+          onRetry={handleRefresh}
+          dataType="Dashboard Data"
+        />
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold gradient-text">Dashboard</h1>
-        <p className="text-gray-300 mt-2">Real-time crypto market intelligence overview</p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 page-transition">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text">Dashboard</h1>
+          <p className="text-gray-300 mt-2">Real-time crypto market intelligence overview</p>
+        </div>
+        <div className="flex items-center space-x-4">
+          <div className="text-sm text-gray-400">
+            Last updated: {new Date().toLocaleTimeString()}
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-2 rounded-lg border border-gray-600 text-gray-300 hover:text-white hover:border-crypto-accent transition-colors disabled:opacity-50 focus-ring"
+            title="Refresh data"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, index) => {
-          const Icon = stat.icon
-          return (
-            <div key={index} className="crypto-card p-6 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-400">{stat.name}</p>
-                  <p className="text-2xl font-bold mt-1">{stat.value}</p>
-                  <div className="flex items-center mt-2">
+      {loading ? (
+        <SkeletonStats />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          {stats.map((stat, index) => {
+            const Icon = stat.icon
+            return (
+              <div key={index} className="crypto-card p-4 sm:p-6 rounded-lg hover:scale-105 transition-transform">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-400">{stat.name}</p>
+                    <p className="text-xl sm:text-2xl font-bold mt-1">{stat.value}</p>
+                    <div className="flex items-center mt-2">
                     {stat.trend === 'up' ? (
                       <TrendingUp className="h-4 w-4 text-crypto-green mr-1" />
                     ) : (
@@ -125,15 +169,23 @@ const Dashboard = () => {
                 <Icon className="h-8 w-8 text-crypto-accent" />
               </div>
             </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Charts */}
-      <div className="grid lg:grid-cols-2 gap-8 mb-8">
-        <div className="crypto-card p-6 rounded-lg">
-          <h2 className="text-xl font-semibold mb-4">24h Mention Activity</h2>
-          <ResponsiveContainer width="100%" height={300}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 mb-6 sm:mb-8">
+        {loading ? (
+          <>
+            <SkeletonChart />
+            <SkeletonChart />
+          </>
+        ) : (
+          <>
+            <div className="crypto-card p-4 sm:p-6 rounded-lg">
+              <h2 className="text-lg sm:text-xl font-semibold mb-4">24h Mention Activity</h2>
+              <ResponsiveContainer width="100%" height={300}>
             <LineChart data={marketData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="time" stroke="#9CA3AF" />
@@ -154,36 +206,46 @@ const Dashboard = () => {
               />
             </LineChart>
           </ResponsiveContainer>
-        </div>
+            </div>
 
-        <div className="crypto-card p-6 rounded-lg">
-          <h2 className="text-xl font-semibold mb-4">Sentiment Analysis</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={sentimentData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="project" stroke="#9CA3AF" />
-              <YAxis stroke="#9CA3AF" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1F2937', 
-                  border: '1px solid #374151',
-                  borderRadius: '8px'
-                }} 
-              />
-              <Bar dataKey="positive" fill="#00FF88" />
-              <Bar dataKey="negative" fill="#FF4757" />
-              <Bar dataKey="neutral" fill="#6B7280" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+            <div className="crypto-card p-4 sm:p-6 rounded-lg">
+              <h2 className="text-lg sm:text-xl font-semibold mb-4">Sentiment Analysis</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={sentimentData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="project" stroke="#9CA3AF" />
+                  <YAxis stroke="#9CA3AF" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1F2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px'
+                    }} 
+                  />
+                  <Bar dataKey="positive" fill="#00FF88" />
+                  <Bar dataKey="negative" fill="#FF4757" />
+                  <Bar dataKey="neutral" fill="#6B7280" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
       </div>
 
       {/* AI Insights */}
-      <div className="crypto-card p-6 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4">AI Market Insights</h2>
-        <div className="prose prose-invert max-w-none">
-          <p className="text-gray-300 leading-relaxed">{insights}</p>
-        </div>
+      <div className="crypto-card p-4 sm:p-6 rounded-lg">
+        <h2 className="text-lg sm:text-xl font-semibold mb-4">AI Market Insights</h2>
+        {loading ? (
+          <div className="space-y-3">
+            <div className="h-4 bg-gray-700 rounded animate-pulse"></div>
+            <div className="h-4 bg-gray-700 rounded animate-pulse w-5/6"></div>
+            <div className="h-4 bg-gray-700 rounded animate-pulse w-4/6"></div>
+          </div>
+        ) : (
+          <div className="prose prose-invert max-w-none">
+            <p className="text-gray-300 leading-relaxed">{insights}</p>
+          </div>
+        )}
       </div>
     </div>
   )
