@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { TrendingUp, TrendingDown, Activity, Bell, Eye, RefreshCw } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Bell, Eye, RefreshCw, Brain, Sparkles } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { generateMarketInsights } from '../services/aiService'
 import { SkeletonStats, SkeletonChart, LoadingSpinner } from '../components/LoadingStates'
 import { DataError } from '../components/ErrorStates'
+import twitterService from '../services/twitterService'
+import sentimentService from '../services/sentimentService'
+import dexScreenerService from '../services/dexScreenerService'
+import coinGeckoService from '../services/coinGeckoService'
 
 const Dashboard = () => {
   const [marketData, setMarketData] = useState([])
@@ -12,6 +16,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [generatingInsights, setGeneratingInsights] = useState(false)
+  const [insightsError, setInsightsError] = useState(null)
 
   useEffect(() => {
     // Simulate market data
@@ -53,15 +59,9 @@ const Dashboard = () => {
         setMarketData(market)
         setSentimentData(sentiment)
         
-        try {
-          const aiInsights = await generateMarketInsights({
-            marketTrend: 'bullish',
-            topMentions: ['Bitcoin', 'Ethereum', 'Solana'],
-            averageSentiment: 0.65
-          })
-          setInsights(aiInsights)
-        } catch (error) {
-          setInsights('Market showing positive sentiment with increased activity in major cryptocurrencies.')
+        // Remove automatic AI insights generation - now manual only
+        if (!insights) {
+          setInsights('Click "Generate AI Insights" to analyze current market conditions with AI.')
         }
       } catch (err) {
         setError(err)
@@ -76,6 +76,107 @@ const Dashboard = () => {
 
   const handleRefresh = () => {
     loadData(true)
+  }
+
+  const generateAIInsights = async () => {
+    setGeneratingInsights(true)
+    setInsightsError(null)
+    
+    try {
+      // Fetch comprehensive real market data from multiple sources
+      const [
+        trendingTopics,
+        coinGeckoTrending,
+        dexTrending,
+        globalMarketData,
+        bitcoinData,
+        ethereumData,
+        solanaData,
+        bitcoinSentiment,
+        ethereumSentiment,
+        solanaSentiment
+      ] = await Promise.allSettled([
+        twitterService.getTrendingTopics(),
+        coinGeckoService.getTrendingCoins(),
+        dexScreenerService.getTrendingTokens(),
+        coinGeckoService.getGlobalMarketData(),
+        coinGeckoService.getCoinsMarketData(['bitcoin']),
+        coinGeckoService.getCoinsMarketData(['ethereum']),
+        coinGeckoService.getCoinsMarketData(['solana']),
+        sentimentService.analyzeProjectSentiment('Bitcoin', { timeframe: '24h', sampleSize: 50 }),
+        sentimentService.analyzeProjectSentiment('Ethereum', { timeframe: '24h', sampleSize: 50 }),
+        sentimentService.analyzeProjectSentiment('Solana', { timeframe: '24h', sampleSize: 50 })
+      ])
+
+      // Process the results
+      const trending = trendingTopics.status === 'fulfilled' ? trendingTopics.value : []
+      const cgTrending = coinGeckoTrending.status === 'fulfilled' ? coinGeckoTrending.value : { coins: [] }
+      const dexTrendingData = dexTrending.status === 'fulfilled' ? dexTrending.value : { trending: [] }
+      const globalData = globalMarketData.status === 'fulfilled' ? globalMarketData.value : null
+      
+      const marketPrices = [
+        bitcoinData.status === 'fulfilled' ? bitcoinData.value[0] : null,
+        ethereumData.status === 'fulfilled' ? ethereumData.value[0] : null,
+        solanaData.status === 'fulfilled' ? solanaData.value[0] : null
+      ].filter(Boolean)
+
+      const sentiments = [
+        bitcoinSentiment.status === 'fulfilled' ? bitcoinSentiment.value : null,
+        ethereumSentiment.status === 'fulfilled' ? ethereumSentiment.value : null,
+        solanaSentiment.status === 'fulfilled' ? solanaSentiment.value : null
+      ].filter(Boolean)
+
+      // Calculate comprehensive market metrics
+      const topMentions = trending.slice(0, 5).map(t => t.topic)
+      const totalVolume = trending.reduce((sum, t) => sum + t.volume, 0)
+      const averageSentiment = sentiments.length > 0 
+        ? sentiments.reduce((sum, s) => sum + s.sentiment_score, 0) / sentiments.length 
+        : 0.5
+      
+      // Determine market trend based on multiple factors
+      const priceChanges = marketPrices.map(p => p.priceChangePercentage24h || 0)
+      const avgPriceChange = priceChanges.length > 0 ? priceChanges.reduce((sum, p) => sum + p, 0) / priceChanges.length : 0
+      
+      let marketTrend = 'neutral'
+      if (averageSentiment > 0.6 && avgPriceChange > 2) {
+        marketTrend = 'bullish'
+      } else if (averageSentiment < 0.4 && avgPriceChange < -2) {
+        marketTrend = 'bearish'
+      } else if (averageSentiment > 0.55 || avgPriceChange > 1) {
+        marketTrend = 'bullish'
+      } else if (averageSentiment < 0.45 || avgPriceChange < -1) {
+        marketTrend = 'bearish'
+      }
+
+      // Prepare comprehensive data for AI analysis
+      const comprehensiveMarketData = {
+        marketTrend,
+        topMentions,
+        averageSentiment,
+        totalVolume,
+        avgPriceChange,
+        trendingTopics: trending,
+        coinGeckoTrending: cgTrending.coins.slice(0, 10),
+        dexTrending: dexTrendingData.trending.slice(0, 10),
+        globalMarketData: globalData,
+        majorTokens: marketPrices,
+        sentimentAnalysis: sentiments,
+        timestamp: new Date().toISOString(),
+        timeframe: '24h',
+        dataSource: 'real_apis'
+      }
+
+      // Generate AI insights with comprehensive real data
+      const aiInsights = await generateMarketInsights(comprehensiveMarketData)
+      setInsights(aiInsights)
+      
+    } catch (error) {
+      console.error('Error generating AI insights:', error)
+      setInsightsError('Failed to generate AI insights. Please try again.')
+      setInsights('Unable to generate AI insights at this time. Please check your connection and try again.')
+    } finally {
+      setGeneratingInsights(false)
+    }
   }
 
   const stats = [
@@ -234,7 +335,34 @@ const Dashboard = () => {
 
       {/* AI Insights */}
       <div className="crypto-card p-4 sm:p-6 rounded-lg">
-        <h2 className="text-lg sm:text-xl font-semibold mb-4">AI Market Insights</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+          <h2 className="text-lg sm:text-xl font-semibold">AI Market Insights</h2>
+          <button
+            onClick={generateAIInsights}
+            disabled={generatingInsights || loading}
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-crypto-accent to-blue-500 text-white rounded-lg hover:from-crypto-accent/80 hover:to-blue-500/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-ring"
+          >
+            {generatingInsights ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                <span>Analyzing...</span>
+              </>
+            ) : (
+              <>
+                <Brain className="h-4 w-4" />
+                <span>Generate AI Insights</span>
+                <Sparkles className="h-4 w-4" />
+              </>
+            )}
+          </button>
+        </div>
+        
+        {insightsError && (
+          <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
+            <p className="text-red-400 text-sm">{insightsError}</p>
+          </div>
+        )}
+        
         {loading ? (
           <div className="space-y-3">
             <div className="h-4 bg-gray-700 rounded animate-pulse"></div>
