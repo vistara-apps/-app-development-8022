@@ -4,7 +4,7 @@
  */
 
 import { analyzeSentiment } from './aiService.js';
-import twitterService from './twitterService.js';
+import supabaseService from './supabaseService.js';
 
 class SentimentService {
   constructor() {
@@ -42,11 +42,26 @@ class SentimentService {
     }
 
     try {
-      // Fetch recent mentions
-      const mentions = await twitterService.searchMentions(project, {
-        maxResults: sampleSize,
-        startTime: this.getTimeframeStart(timeframe)
+      // First try to get cached sentiment data
+      const cachedSentiment = await supabaseService.getCachedSentiment(project, timeframe);
+      
+      // If we have recent cached data, return it
+      if (cachedSentiment.metrics.total_mentions > 10) {
+        // Cache the result
+        this.sentimentCache.set(cacheKey, {
+          data: cachedSentiment,
+          timestamp: Date.now()
+        });
+        return cachedSentiment;
+      }
+
+      // Otherwise fetch fresh mentions through secure edge function
+      const mentionResponse = await supabaseService.getTwitterMentions(project, {
+        timeframe,
+        maxResults: sampleSize
       });
+      
+      const mentions = mentionResponse.data || [];
 
       // Filter by engagement threshold
       const filteredTweets = mentions.tweets.filter(tweet => 
