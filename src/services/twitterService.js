@@ -6,7 +6,7 @@
 class TwitterService {
   constructor() {
     this.baseURL = 'https://api.twitter.com/2';
-    this.bearerToken = process.env.VITE_TWITTER_BEARER_TOKEN;
+    this.bearerToken = import.meta.env.VITE_TWITTER_BEARER_TOKEN;
     this.rateLimitCache = new Map();
     this.requestQueue = [];
     this.isProcessingQueue = false;
@@ -16,6 +16,14 @@ class TwitterService {
    * Get Twitter Bearer Token from environment or fallback
    */
   getBearerToken() {
+    // Debug logging to help troubleshoot token loading
+    if (!this.bearerToken) {
+      console.warn('VITE_TWITTER_BEARER_TOKEN not found in environment variables');
+      console.log('Available env vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')));
+    } else {
+      console.log('Twitter Bearer Token loaded successfully (length:', this.bearerToken.length, ')');
+    }
+    
     return this.bearerToken || 'YOUR_TWITTER_BEARER_TOKEN_HERE';
   }
 
@@ -295,4 +303,3 @@ class TwitterService {
 }
 
 export default new TwitterService();
-
