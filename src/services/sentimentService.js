@@ -116,15 +116,23 @@ class SentimentService {
     try {
       const result = await analyzeSentiment(text);
       return {
-        sentiment: this.normalizeSentiment(result.sentiment),
-        confidence: result.confidence || 0.5,
-        score: this.calculateSentimentScore(result.sentiment, result.confidence),
-        keywords: this.extractKeywords(text),
-        emotions: result.emotions || []
+        sentiment: result.sentiment,
+        confidence: result.confidence,
+        sentiment_score: result.sentiment_score,
+        explanation: result.explanation,
+        key_phrases: result.key_phrases,
+        text: text.slice(0, 100) + (text.length > 100 ? '...' : '')
       };
     } catch (error) {
       console.error('Single text sentiment analysis error:', error);
-      return this.getDefaultSentiment();
+      return {
+        sentiment: 'neutral',
+        confidence: 0.5,
+        sentiment_score: 0.5,
+        explanation: 'Analysis failed - using neutral sentiment',
+        key_phrases: [],
+        text: text.slice(0, 100) + (text.length > 100 ? '...' : '')
+      };
     }
   }
 
@@ -133,14 +141,28 @@ class SentimentService {
    */
   calculateProjectSentiment(tweets, sentimentResults, includeInfluencers) {
     if (!tweets.length || !sentimentResults.length) {
-      return this.getMockSentimentAnalysis('Unknown');
+      return {
+        project: 'Unknown',
+        sentiment_score: 0.5,
+        confidence: 0.5,
+        explanation: 'No data available for sentiment analysis',
+        metrics: {
+          total_mentions: 0,
+          positive_mentions: 0,
+          negative_mentions: 0,
+          neutral_mentions: 0
+        },
+        key_insights: ['No mentions found'],
+        sample_analyses: []
+      };
     }
 
     let totalScore = 0;
     let totalWeight = 0;
     const sentimentCounts = { positive: 0, negative: 0, neutral: 0 };
-    const topKeywords = new Map();
+    const allKeyPhrases = [];
     const influencerSentiments = [];
+    const sampleAnalyses = [];
 
     tweets.forEach((tweet, index) => {
       const sentiment = sentimentResults[index];
@@ -148,61 +170,123 @@ class SentimentService {
 
       // Calculate weight based on engagement and influence
       let weight = 1;
+      const engagement = tweet.public_metrics?.like_count || tweet.engagement || 0;
+      const followers = tweet.author?.public_metrics?.followers_count || 0;
+      
       if (includeInfluencers) {
-        weight = 1 + (tweet.influence * 2) + (Math.log10(tweet.engagement + 1) / 10);
+        weight = 1 + (Math.log10(followers + 1) / 100) + (Math.log10(engagement + 1) / 10);
       }
 
-      totalScore += sentiment.score * weight;
+      totalScore += sentiment.sentiment_score * weight;
       totalWeight += weight;
 
       // Count sentiment types
       sentimentCounts[sentiment.sentiment]++;
 
-      // Track keywords
-      sentiment.keywords.forEach(keyword => {
-        topKeywords.set(keyword, (topKeywords.get(keyword) || 0) + weight);
-      });
+      // Track key phrases
+      if (sentiment.key_phrases) {
+        allKeyPhrases.push(...sentiment.key_phrases);
+      }
 
       // Track influencer sentiments
-      if (tweet.influence > 0.5) {
+      if (followers > 10000 || engagement > 100) {
         influencerSentiments.push({
-          author: tweet.author.username,
+          author: tweet.author?.username || 'Unknown',
           sentiment: sentiment.sentiment,
-          score: sentiment.score,
-          influence: tweet.influence,
-          text: tweet.text.substring(0, 100) + '...'
+          score: sentiment.sentiment_score,
+          followers: followers,
+          text: tweet.text.substring(0, 100) + (tweet.text.length > 100 ? '...' : ''),
+          explanation: sentiment.explanation
+        });
+      }
+
+      // Add to sample analyses (first 5)
+      if (sampleAnalyses.length < 5) {
+        sampleAnalyses.push({
+          text: tweet.text.substring(0, 150) + (tweet.text.length > 150 ? '...' : ''),
+          sentiment: sentiment.sentiment,
+          score: sentiment.sentiment_score,
+          explanation: sentiment.explanation,
+          key_phrases: sentiment.key_phrases
         });
       }
     });
 
-    const averageScore = totalWeight > 0 ? totalScore / totalWeight : 0;
+    const averageScore = totalWeight > 0 ? totalScore / totalWeight : 0.5;
     const totalTweets = tweets.length;
+    
+    // Generate explanation based on data
+    const dominantSentiment = Object.keys(sentimentCounts).reduce((a, b) => 
+      sentimentCounts[a] > sentimentCounts[b] ? a : b
+    );
+    
+    const topPhrases = [...new Set(allKeyPhrases)].slice(0, 5);
+    
+    let explanation = `Analysis of ${totalTweets} mentions shows ${dominantSentiment} sentiment (${Math.round(averageScore * 100)}% score). `;
+    
+    if (influencerSentiments.length > 0) {
+      explanation += `${influencerSentiments.length} influencer mentions detected. `;
+    }
+    
+    if (topPhrases.length > 0) {
+      explanation += `Key themes: ${topPhrases.join(', ')}.`;
+    }
 
     return {
       project: tweets[0]?.text.match(/\$([A-Z]+)/)?.[1] || 'Unknown',
-      overall_sentiment: this.scoreToSentiment(averageScore),
       sentiment_score: Math.round(averageScore * 100) / 100,
       confidence: this.calculateConfidence(sentimentResults),
-      distribution: {
-        positive: Math.round((sentimentCounts.positive / totalTweets) * 100),
-        negative: Math.round((sentimentCounts.negative / totalTweets) * 100),
-        neutral: Math.round((sentimentCounts.neutral / totalTweets) * 100)
-      },
+      explanation: explanation,
       metrics: {
         total_mentions: totalTweets,
-        analyzed_tweets: sentimentResults.length,
-        average_engagement: Math.round(tweets.reduce((sum, t) => sum + t.engagement, 0) / totalTweets),
-        influencer_mentions: influencerSentiments.length,
-        timeframe: '24h'
+        positive_mentions: sentimentCounts.positive,
+        negative_mentions: sentimentCounts.negative,
+        neutral_mentions: sentimentCounts.neutral,
+        influencer_mentions: influencerSentiments.length
       },
-      top_keywords: Array.from(topKeywords.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([keyword, weight]) => ({ keyword, weight: Math.round(weight) })),
-      influencer_insights: influencerSentiments.slice(0, 5),
-      trend_analysis: this.analyzeTrend(tweets, sentimentResults),
-      last_updated: new Date().toISOString()
+      key_insights: this.generateKeyInsights(sentimentCounts, influencerSentiments, topPhrases),
+      sample_analyses: sampleAnalyses,
+      influencer_sentiment: influencerSentiments
     };
+  }
+
+  /**
+   * Generate key insights from sentiment analysis
+   */
+  generateKeyInsights(sentimentCounts, influencerSentiments, topPhrases) {
+    const insights = [];
+    const total = Object.values(sentimentCounts).reduce((sum, count) => sum + count, 0);
+    
+    if (total === 0) return ['No data available'];
+    
+    // Sentiment distribution insights
+    const positivePercent = Math.round((sentimentCounts.positive / total) * 100);
+    const negativePercent = Math.round((sentimentCounts.negative / total) * 100);
+    
+    if (positivePercent > 60) {
+      insights.push(`Strong positive sentiment (${positivePercent}% of mentions)`);
+    } else if (negativePercent > 60) {
+      insights.push(`Strong negative sentiment (${negativePercent}% of mentions)`);
+    } else {
+      insights.push(`Mixed sentiment: ${positivePercent}% positive, ${negativePercent}% negative`);
+    }
+    
+    // Influencer insights
+    if (influencerSentiments.length > 0) {
+      const positiveInfluencers = influencerSentiments.filter(i => i.sentiment === 'positive').length;
+      if (positiveInfluencers > influencerSentiments.length / 2) {
+        insights.push(`Influencers are mostly positive (${positiveInfluencers}/${influencerSentiments.length})`);
+      } else {
+        insights.push(`Mixed influencer sentiment (${positiveInfluencers}/${influencerSentiments.length} positive)`);
+      }
+    }
+    
+    // Key phrases insight
+    if (topPhrases.length > 0) {
+      insights.push(`Common themes: ${topPhrases.slice(0, 3).join(', ')}`);
+    }
+    
+    return insights;
   }
 
   /**
@@ -406,4 +490,3 @@ class SentimentService {
 }
 
 export default new SentimentService();
-

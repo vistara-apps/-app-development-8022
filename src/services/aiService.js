@@ -14,23 +14,49 @@ export const analyzeSentiment = async (text) => {
       messages: [
         {
           role: "system",
-          content: "You are a crypto sentiment analyzer. Analyze the given text and return a JSON response with sentiment (positive/negative/neutral), confidence (0-1), and key insights."
+          content: `You are a crypto sentiment analyzer. Analyze the given text and return ONLY a valid JSON object (no markdown, no code blocks) with:
+- sentiment: "positive", "negative", or "neutral"  
+- confidence: number between 0 and 1
+- sentiment_score: number between 0 and 1 (0=very negative, 0.5=neutral, 1=very positive)
+- explanation: brief explanation of the sentiment
+- key_phrases: array of important phrases that influenced the sentiment
+
+Example: {"sentiment":"positive","confidence":0.8,"sentiment_score":0.75,"explanation":"Bullish language about price growth","key_phrases":["moon","bullish","pump"]}`
         },
         {
           role: "user",
-          content: `Analyze the sentiment of this crypto-related text: "${text}"`
+          content: `Analyze: "${text.slice(0, 200)}"`
         }
       ],
-      temperature: 0.3,
+      temperature: 0.1,
+      max_tokens: 200
     });
 
-    return JSON.parse(response.choices[0].message.content);
+    let content = response.choices[0].message.content.trim();
+    
+    // Remove markdown code blocks if present
+    if (content.startsWith('```')) {
+      content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    }
+    
+    const result = JSON.parse(content);
+    
+    // Ensure required fields exist
+    return {
+      sentiment: result.sentiment || 'neutral',
+      confidence: Math.min(Math.max(result.confidence || 0.5, 0), 1),
+      sentiment_score: Math.min(Math.max(result.sentiment_score || 0.5, 0), 1),
+      explanation: result.explanation || 'No explanation available',
+      key_phrases: result.key_phrases || []
+    };
   } catch (error) {
     console.error('Sentiment analysis error:', error);
     return {
       sentiment: 'neutral',
       confidence: 0.5,
-      insights: ['Analysis unavailable']
+      sentiment_score: 0.5,
+      explanation: 'Analysis failed - using neutral sentiment',
+      key_phrases: []
     };
   }
 };
